@@ -1,0 +1,40 @@
+// user/forktest.c
+// 仅使用已有 syscalls: fork=1, exit=2, wait=3, kill=4, getpid=5
+
+#define SYS_fork   1
+#define SYS_exit   2
+#define SYS_wait   3
+#define SYS_kill   4
+#define SYS_getpid 5
+
+static inline long syscall(long num, long a0, long a1, long a2) {
+    register long _a7 asm("a7") = num;
+    register long _a0 asm("a0") = a0;
+    register long _a1 asm("a1") = a1;
+    register long _a2 asm("a2") = a2;
+    asm volatile("ecall" : "+r"(_a0) : "r"(_a7), "r"(_a1), "r"(_a2) : "memory");
+    return _a0;
+}
+
+int main() {
+    int child = (int)syscall(SYS_fork, 0,0,0);
+    if (child == 0) {
+        // 子进程逻辑
+        syscall(SYS_exit, 42,0,0);
+        while(1) {}
+    } else if (child > 0) {
+        // 父进程等待
+        int status = 0;
+        int r;
+        do {
+            r = (int)syscall(SYS_wait, (long)&status, 0,0);
+        } while (r < 0); // 直到有子进程退出
+        syscall(SYS_exit, 0,0,0);
+        while(1) {}
+    } else {
+        // fork 失败
+        syscall(SYS_exit, -1,0,0);
+        while(1) {}
+    }
+    return 0;
+}
