@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "stdarg.h": "c",
+        "types.h": "c",
+        "printf.h": "c",
+        "riscv.h": "c",
+        "memlayout.h": "c",
+        "defs.h": "c",
+        "proc.h": "c",
+        "syscall.h": "c"
+    }
+}
