@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to QEMU (RISC-V kernel)",
+      "type": "cppdbg",
+      "request": "launch",
+
+      "program": "${workspaceFolder}/kernel/kernel",
+      "cwd": "${workspaceFolder}",
+
+      "MIMode": "gdb",
+      "miDebuggerPath": "/opt/riscv/bin/riscv64-unknown-elf-gdb",
+
+      "externalConsole": false,
+      "setupCommands": [
+        { "text": "set architecture riscv:rv64" },
+        { "text": "set confirm off" },
+        { "text": "set pagination off" },
+        { "text": "target remote localhost:1234" }
+      ],
+
+      "stopAtEntry": false
+    }
+  ]
+}

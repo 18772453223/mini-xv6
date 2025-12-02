@@ -18,10 +18,6 @@ CFLAGS  := -march=rv64gc -mabi=lp64 -mcmodel=medany \
 
 LDFLAGS := -T $(BOOTDIR)/kernel.ld -nostdlib
 
-# 源文件（只写文件名）
-SRCS = entry.S main.c uart.c console.c print.c test.c kalloc.c vm.c string.c start.c trap.c plic.c kernelvec.S \
-	proc.c swtch.S trampoline.S syscall.c
-
 # user program (forktest) build into binary object
 USER_ASM = forktest.S
 
@@ -58,6 +54,11 @@ run: $(KERNEL)
 	-cpu rv64,sstc=on \
 	-nographic -bios none -kernel $(KERNEL)
 
+debug: $(KERNEL)
+	qemu-system-riscv64 -machine virt \
+	-cpu rv64,sstc=on \
+	-bios none \
+	-nographic -bios none -kernel $(KERNEL) -s -S
 
 clean:
 	rm -f $(OBJS) $(KERNEL)

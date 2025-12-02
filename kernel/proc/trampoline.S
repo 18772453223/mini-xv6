@@ -20,6 +20,8 @@ trampoline:
 .align 4
 .globl uservec
 uservec:    
+
+
 	#
         # trap.c sets stvec to point here, so
         # traps from user space start here,
@@ -99,6 +101,7 @@ uservec:
 
 .globl userret
 userret:
+        .word 0x0000000000000000  # padding
         # usertrap() returns here, with user satp in a0.
         # return from kernel to user.
 

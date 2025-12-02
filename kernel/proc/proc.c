@@ -5,10 +5,11 @@
 
 struct proc procs[NPROC];
 struct cpu cur_cpu;
+extern pagetable_t kernel_pagetable;
 
 extern char trampoline[];
 extern char userret[];
-void forkret(); // forward declaration for context ra
+extern void forkret(); 
 
 int nextpid = 1;
 
@@ -50,6 +51,19 @@ struct proc *allocate_process() {
                 return 0;
             }
 
+            // Allocate kernel stack
+            char *kstack_pa = (char*)alloc_page();
+            if(kstack_pa == 0) {
+                free_proc_pagetable(p);
+                free_page((void*)p->trapframe);
+                p->trapframe = 0;
+                pop_off();
+                return 0;
+            }
+            uint64 kstack_va = p->kstack;
+            // Map in kernel page table
+            kernel_map(kernel_pagetable, kstack_va, (uint64)kstack_pa, PGSIZE, PTE_R | PTE_W);
+
             p->state = USED;
 
             memset(&p->context, 0, sizeof(struct context));
@@ -73,6 +87,14 @@ static void free_process(struct proc *p) {
     if(p->pagetable)
         free_proc_pagetable(p);
     p->pagetable = 0;
+    
+    pte_t *pte = walk(kernel_pagetable, p->kstack, 0);
+    if(pte && (*pte & PTE_V)) {
+        uint64 pa = PTE2PA(*pte);
+        free_page((void*)pa);
+        *pte = 0; // Unmap
+    }
+
     p->sz = 0;
     p->pid = 0;
     p->parent = 0;
@@ -118,12 +140,19 @@ int kfork() {
 // return to user after first schedule of a new child
 void forkret() {
     struct proc *p = get_current_process();
+
+    pop_off();
     printf("forkret: pid=%d entering user mode\n", p->pid);
+    printf("forkret: trapframe epc=%lx sp=%lx ra=%lx\n", p->trapframe->epc, p->trapframe->sp, p->trapframe->ra);
 
     prepare_return();
 
     uint64 satp = MAKE_SATP(p->pagetable);
     uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
+
+    printf("forkret: calling userret at %lx with satp=%lx\n", trampoline_userret, satp);
+    printf("forkret: about to jump, current pc will be lost\n");
+    
     ((void (*)(uint64))trampoline_userret)(satp);
 }
 
@@ -171,27 +200,25 @@ void scheduler() {
     c->proc = 0;
 
     for (;;) {
-        /* intr_on();
-        intr_off(); */
+        intr_on();
 
         for (int i = 0; i < NPROC; i++) {
             p = &procs[i];
-
-            printf("scheduler: checking pid=%d state=%d\n", p->pid, p->state);
 
             push_off(); // disable interrupts while we scan & pick a RUNNABLE proc
             
             if (p->state == RUNNABLE) {
 
-                printf("scheduler: switching to pid=%d\n", p->pid);
+                printf("scheduler: switching to %d, ra=%lx\n", p->pid, p->context.ra);
                 p->state = RUNNING;
                 c->proc = p;
-                swtch(&c->context, &p->context); // switch into process; returns when process calls sched()
 
+                swtch(&c->context, &p->context); // switch into process; returns when process calls sched()
+                
                 c->proc = 0;
             }
+            pop_off(); 
         }
-        pop_off(); // re-enable interrupts between scheduling cycles
     }
 }
 
@@ -204,13 +231,13 @@ void sched() {
     swtch(&p->context, &c->context);
 }
 
-// yield CPU voluntarily
+// yield CPU 
 void yield() {
-    printf("yield: pid=%d\n", get_current_process()->pid);
     struct proc *p = get_current_process();
     if(p == 0){
         return;
     }
+    printf("yield: pid=%d\n", p->pid);
     push_off();
 
     if(p->state == RUNNING) {
@@ -250,25 +277,38 @@ void wakeup(void *chan) {
 void userinit() {
     struct proc *p = allocate_process();
 
-    if(p == 0) { 
+    if (p == 0) { 
         panic("userinit alloc failed");
     }
 
     char *mem = (char*)alloc_page();
 
-    if(mem==0) {
+    if (mem == 0) {
         panic("userinit page alloc");
     }
 
-    if(mappages(p->pagetable, 0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_X|PTE_U) < 0)
+    if (mappages(p->pagetable, 0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_X|PTE_U) < 0)
         panic("userinit mappages");
 
     uint64 sz = (uint64)forktest_end - (uint64)forktest_start;
+
+    printf("userinit: loading forktest_start=%lx end=%lx sz=%lu\n", (uint64)forktest_start, (uint64)forktest_end, sz);
+
     if(sz > PGSIZE) panic("forktest too big");
 
     memmove(mem, forktest_start, sz);
 
+    // Debug: verify the copied code
+    printf("userinit: first 4 instructions at mem:\n");
+    unsigned int *code = (unsigned int*)mem;
+    for(int i = 0; i < 4; i++) {
+        printf("  [%d] = 0x%x\n", i, code[i]);
+    }
+
     p->sz = PGSIZE; // simple fixed size
+    
+    // Initialize trapframe - clear all registers
+    memset(p->trapframe, 0, sizeof(struct trapframe));
     p->trapframe->epc = 0;
     p->trapframe->sp = PGSIZE; // stack at top of first page
     

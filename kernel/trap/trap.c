@@ -42,9 +42,13 @@ void disable_interrupt(int irq);
 
 
 // handle traps from user space (syscall, interrupt, exception)
-void usertrap() {
-    struct proc *p = get_current_process();
+uint64 usertrap() {
     uint64 scause = r_scause();
+    uint64 sepc = r_sepc();
+    struct proc *p = get_current_process();
+    printf("usertrap ENTER: scause=%lx sepc=%lx pid=%d\n",
+           scause, sepc, p ? p->pid : -1);
+    
 
     // set stvec to kernel handler while in kernel
     w_stvec((uint64)kernelvec);
@@ -79,8 +83,8 @@ void usertrap() {
     // return to user space
     prepare_return();
     uint64 satp = MAKE_SATP(p->pagetable);
-    uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
-    ((void (*)(uint64))trampoline_userret)(satp);
+    
+    return satp;
 }
 
 void kerneltrap() {
@@ -108,7 +112,7 @@ void kerneltrap() {
         if(which_dev == 0){
             printf("kerneltrap: unknown interrupt scause=0x%lx sepc=0x%lx stval=0x%lx\n", scause, r_sepc(), r_stval());
             panic("kerneltrap");
-        } else if (which_dev == 2 && get_current_process()) {
+        } else if (which_dev == 2 && get_current_process() != 0) {
             // timer interrupt
             // yield to scheduler
             printf("kerneltrap: timer interrupt yield pid=%d\n", get_current_process()->pid);
@@ -164,6 +168,11 @@ void timer_interrupt() {
 
 void handle_exception() {
     uint64 scause = r_scause();
+    uint64 sepc = r_sepc();
+    uint64 stval = r_stval();
+    printf("handle_exception: scause=%lu sepc=%lx stval=%lx\n",
+           scause, sepc, stval);
+           
     switch (scause) {
         case 2:
             panic("handle_exception: Illegal instruction");
@@ -202,6 +211,9 @@ void prepare_return(void) {
     w_sstatus(x);
 
     uint64 uservec_pos = TRAMPOLINE + (uservec - trampoline);
+    printf("prepare_return: stvec=%lx sepc=%lx sstatus=%lx\n", uservec_pos, p->trapframe->epc, x);
+    printf("prepare_return: trapframe=%lx TRAPFRAME=%lx\n", (uint64)p->trapframe, TRAPFRAME);
+    printf("usertrap: %lx\n", uservec_pos);
     w_stvec(uservec_pos);
     w_sepc(p->trapframe->epc);
 }

@@ -5,7 +5,7 @@
 pagetable_t kernel_pagetable;
 
 extern char etext[];  // kernel.ld sets this to end of kernel code.
-
+extern char trampoline[]; // trampoline.S
 
 pagetable_t create_pagetable(void) {
     pagetable_t kpgtbl;
@@ -28,6 +28,11 @@ pagetable_t create_pagetable(void) {
     // map kernel data and the physical RAM we'll make use of.
     kernel_map(kpgtbl, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
     printf("Mapped kernel data and physical RAM\n");
+
+    // map the trampoline for trap entry/exit to
+    // the highest virtual address in the kernel.
+    kernel_map(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+    printf("Mapped trampoline, trampoline addr: %lx\n", (uint64)trampoline);
 
     return kpgtbl;
 

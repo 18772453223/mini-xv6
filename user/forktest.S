@@ -1,17 +1,15 @@
-    .section .text
-    .align 2
+.section .text
 
-    .globl forktest_start
-    .globl forktest_end
+.globl forktest_start
+.globl forktest_end
 
 /*
- * initcode 风格的最小用户程序：测试 fork / wait / exit / getpid
+ * initcode 风格的最小用户程序：测试 fork / exit / getpid
  * 内核已在 sys_getpid 里打印 pid，不需要用户态输出。
- * 约束：不使用用户栈指针传参给 wait，传 0 避免内核写用户页导致 Store/AMO fault。
  * 流程：
  *   fork -> 根据返回值分支：
  *     子进程: getpid -> exit(42)
- *     父进程: 循环尝试 wait(0) 直到成功 -> exit(0)
+ *     父进程: exit(0) (不等待)
  */
 forktest_start:
     # 调用 fork
@@ -21,14 +19,8 @@ forktest_start:
     bltz    a0, fork_fail  # 错误直接退出
     beqz    a0, child      # 子进程分支
 
-parent_wait_loop:
-    li      a7, 3          # SYS_wait
-    li      a0, 0          # status 指针传 0
-    ecall                  # a0 = child pid 或 -1
-    sext.w  a0, a0
-    bltz    a0, parent_wait_loop  # 还没子退出继续等
-
-    # 成功等到子进程退出 -> exit(0)
+parent:
+    # 父进程直接退出，无需等待
     li      a7, 2          # SYS_exit
     li      a0, 0
     ecall
