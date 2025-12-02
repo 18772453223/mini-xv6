@@ -9,7 +9,7 @@ extern pagetable_t kernel_pagetable;
 
 extern char trampoline[];
 extern char userret[];
-extern void forkret(); 
+extern void forkret();
 
 int nextpid = 1;
 
@@ -20,42 +20,50 @@ extern char forktest_start[];
 extern char forktest_end[];
 
 // Init process table
-void init_process_table() {
-    for (int i = 0; i < NPROC; i++) {
+void init_process_table()
+{
+    for (int i = 0; i < NPROC; i++)
+    {
         struct proc *p = &procs[i];
         p->state = UNUSED;
         p->kstack = KSTACK((uint64)(p - procs));
     }
 }
-    
+
 // allocate a new process structure and kernel state
-struct proc *allocate_process() {
+struct proc *allocate_process()
+{
     push_off();
 
-    for (int i = 0; i < NPROC; i++) {
+    for (int i = 0; i < NPROC; i++)
+    {
         struct proc *p = &procs[i];
-        if (p->state == UNUSED) {
+        if (p->state == UNUSED)
+        {
             p->pid = nextpid++;
-            
-            p->trapframe = (struct trapframe*)alloc_page();
-            if (p->trapframe == 0) {
+
+            p->trapframe = (struct trapframe *)alloc_page();
+            if (p->trapframe == 0)
+            {
                 pop_off();
                 return 0;
             }
 
             p->pagetable = proc_pagetable(p);
-            if (p->pagetable == 0) {
-                free_page((void*)p->trapframe);
+            if (p->pagetable == 0)
+            {
+                free_page((void *)p->trapframe);
                 p->trapframe = 0;
                 pop_off();
                 return 0;
             }
 
             // Allocate kernel stack
-            char *kstack_pa = (char*)alloc_page();
-            if(kstack_pa == 0) {
+            char *kstack_pa = (char *)alloc_page();
+            if (kstack_pa == 0)
+            {
                 free_proc_pagetable(p);
-                free_page((void*)p->trapframe);
+                free_page((void *)p->trapframe);
                 p->trapframe = 0;
                 pop_off();
                 return 0;
@@ -73,25 +81,26 @@ struct proc *allocate_process() {
             pop_off();
             return p;
         }
-        
     }
     pop_off();
     return 0;
 }
 
 // free process resources and mark UNUSED
-static void free_process(struct proc *p) {
-    if(p->trapframe)
-        free_page((void*)p->trapframe);
+static void free_process(struct proc *p)
+{
+    if (p->trapframe)
+        free_page((void *)p->trapframe);
     p->trapframe = 0;
-    if(p->pagetable)
+    if (p->pagetable)
         free_proc_pagetable(p);
     p->pagetable = 0;
-    
+
     pte_t *pte = walk(kernel_pagetable, p->kstack, 0);
-    if(pte && (*pte & PTE_V)) {
+    if (pte && (*pte & PTE_V))
+    {
         uint64 pa = PTE2PA(*pte);
-        free_page((void*)pa);
+        free_page((void *)pa);
         *pte = 0; // Unmap
     }
 
@@ -106,18 +115,21 @@ static void free_process(struct proc *p) {
 }
 
 // internal fork implementation: duplicate current process
-int kfork() {
+int kfork()
+{
     struct proc *new_proc = allocate_process();
-    if (new_proc == 0) {
+    if (new_proc == 0)
+    {
         printf("kfork: allocate_process failed\n");
         return -1;
     }
 
     struct proc *cur_proc = get_current_process();
-    
+
     printf("kfork: parent pid=%d sz=%lu\n", cur_proc->pid, cur_proc->sz);
 
-    if (copy_user_memory(cur_proc->pagetable, new_proc->pagetable, cur_proc->sz) < 0) {
+    if (copy_user_memory(cur_proc->pagetable, new_proc->pagetable, cur_proc->sz) < 0)
+    {
         printf("kfork: copy_user_memory failed\n");
         free_process(new_proc);
         return -1;
@@ -126,7 +138,7 @@ int kfork() {
     *(new_proc->trapframe) = *(cur_proc->trapframe);
     new_proc->sz = cur_proc->sz;
     // fork return 0 in child process
-    new_proc->trapframe->a0 = 0; 
+    new_proc->trapframe->a0 = 0;
 
     push_off();
     new_proc->parent = cur_proc;
@@ -138,7 +150,8 @@ int kfork() {
 }
 
 // return to user after first schedule of a new child
-void forkret() {
+void forkret()
+{
     struct proc *p = get_current_process();
 
     pop_off();
@@ -150,34 +163,40 @@ void forkret() {
     uint64 satp = MAKE_SATP(p->pagetable);
     uint64 trampoline_userret = TRAMPOLINE + (userret - trampoline);
 
-    printf("forkret: calling userret at %lx with satp=%lx\n", trampoline_userret, satp);
+    printf("forkret: calling userret at %lx with satp_hi=%x satp_lo=%x\n", trampoline_userret, (uint)((satp >> 32) & 0xffffffff), (uint)(satp & 0xffffffff));
     printf("forkret: about to jump, current pc will be lost\n");
-    
+
     ((void (*)(uint64))trampoline_userret)(satp);
 }
 
-struct cpu* get_current_cpu() {
+struct cpu *get_current_cpu()
+{
     return &cur_cpu;
 }
 
-struct proc* get_current_process() {
+struct proc *get_current_process()
+{
     return get_current_cpu()->proc;
 }
 
 // allocate a pagetable which maps trampoline and trapframe for process.
-pagetable_t proc_pagetable(struct proc *p) {
+pagetable_t proc_pagetable(struct proc *p)
+{
     pagetable_t pagetable = create_user_pagetable();
-    if (pagetable == 0) {
+    if (pagetable == 0)
+    {
         return 0;
     }
 
     // map trampoline code (for system call return)
-    if (mappages(pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X) < 0) {
+    if (mappages(pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X) < 0)
+    {
         free_user_pagetable(pagetable, 0);
         return 0;
-    } 
+    }
     // map trapframe page
-    if (mappages(pagetable, TRAPFRAME, PGSIZE, (uint64)p->trapframe, PTE_R | PTE_W) < 0) {
+    if (mappages(pagetable, TRAPFRAME, PGSIZE, (uint64)p->trapframe, PTE_R | PTE_W) < 0)
+    {
         remove_user_mappings(pagetable, TRAMPOLINE, 1, 0);
         free_user_pagetable(pagetable, 0);
         return 0;
@@ -185,62 +204,70 @@ pagetable_t proc_pagetable(struct proc *p) {
     return pagetable;
 }
 
-void free_proc_pagetable(struct proc *p) {
+void free_proc_pagetable(struct proc *p)
+{
     remove_user_mappings(p->pagetable, TRAMPOLINE, 1, 0);
     remove_user_mappings(p->pagetable, TRAPFRAME, 1, 0);
     free_user_pagetable(p->pagetable, p->sz);
 }
 
 // simple round-robin scheduler
-void scheduler() {
+void scheduler()
+{
     printf("scheduler started\n");
-    
+
     struct proc *p = get_current_process();
     struct cpu *c = get_current_cpu();
     c->proc = 0;
 
-    for (;;) {
+    for (;;)
+    {
         intr_on();
 
-        for (int i = 0; i < NPROC; i++) {
+        for (int i = 0; i < NPROC; i++)
+        {
             p = &procs[i];
 
             push_off(); // disable interrupts while we scan & pick a RUNNABLE proc
-            
-            if (p->state == RUNNABLE) {
+
+            if (p->state == RUNNABLE)
+            {
 
                 printf("scheduler: switching to %d, ra=%lx\n", p->pid, p->context.ra);
                 p->state = RUNNING;
                 c->proc = p;
 
                 swtch(&c->context, &p->context); // switch into process; returns when process calls sched()
-                
+
                 c->proc = 0;
             }
-            pop_off(); 
+            pop_off();
         }
     }
 }
 
 // switch from process to scheduler context
-void sched() {
+void sched()
+{
     struct proc *p = get_current_process();
     struct cpu *c = get_current_cpu();
-
 
     swtch(&p->context, &c->context);
 }
 
-// yield CPU 
-void yield() {
+// yield CPU
+void yield()
+{
     struct proc *p = get_current_process();
-    if(p == 0){
+    if (p == 0)
+    {
         return;
     }
     printf("yield: pid=%d\n", p->pid);
     push_off();
 
-    if(p->state == RUNNING) {
+    if (p->state == RUNNING)
+    {
         p->state = RUNNABLE;
     }
 
@@ -248,25 +275,29 @@ void yield() {
     sched();
 }
 // sleep on a channel (simple, busy scheduling around SLEEPING state)
-void sleep(void *chan) {
+void sleep(void *chan)
+{
     struct proc *p = get_current_process();
 
     push_off();
     p->chan = chan;
     p->state = SLEEPING;
     pop_off();
-    
+
     sched();
     // when woken
     p->chan = 0;
 }
 
 // wake up all processes sleeping on chan
-void wakeup(void *chan) {
+void wakeup(void *chan)
+{
     push_off();
-    for(int i=0;i<NPROC;i++){
-        struct proc *p=&procs[i];
-        if(p->state==SLEEPING && p->chan==chan){
+    for (int i = 0; i < NPROC; i++)
+    {
+        struct proc *p = &procs[i];
+        if (p->state == SLEEPING && p->chan == chan)
+        {
             p->state = RUNNABLE;
         }
     }
@@ -274,44 +305,49 @@ void wakeup(void *chan) {
 }
 
 // userinit: load embedded forktest binary and make runnable
-void userinit() {
+void userinit()
+{
     struct proc *p = allocate_process();
 
-    if (p == 0) { 
+    if (p == 0)
+    {
         panic("userinit alloc failed");
     }
 
-    char *mem = (char*)alloc_page();
+    char *mem = (char *)alloc_page();
 
-    if (mem == 0) {
+    if (mem == 0)
+    {
         panic("userinit page alloc");
     }
 
-    if (mappages(p->pagetable, 0, PGSIZE, (uint64)mem, PTE_R|PTE_W|PTE_X|PTE_U) < 0)
+    if (mappages(p->pagetable, 0, PGSIZE, (uint64)mem, PTE_R | PTE_W | PTE_X | PTE_U) < 0)
         panic("userinit mappages");
 
     uint64 sz = (uint64)forktest_end - (uint64)forktest_start;
 
     printf("userinit: loading forktest_start=%lx end=%lx sz=%lu\n", (uint64)forktest_start, (uint64)forktest_end, sz);
 
-    if(sz > PGSIZE) panic("forktest too big");
+    if (sz > PGSIZE)
+        panic("forktest too big");
 
     memmove(mem, forktest_start, sz);
 
     // Debug: verify the copied code
     printf("userinit: first 4 instructions at mem:\n");
-    unsigned int *code = (unsigned int*)mem;
-    for(int i = 0; i < 4; i++) {
+    unsigned int *code = (unsigned int *)mem;
+    for (int i = 0; i < 4; i++)
+    {
         printf("  [%d] = 0x%x\n", i, code[i]);
     }
 
     p->sz = PGSIZE; // simple fixed size
-    
+
     // Initialize trapframe - clear all registers
     memset(p->trapframe, 0, sizeof(struct trapframe));
     p->trapframe->epc = 0;
     p->trapframe->sp = PGSIZE; // stack at top of first page
-    
+
     safestrcpy(p->name, "forktest", sizeof(p->name));
 
     push_off();
@@ -322,12 +358,14 @@ void userinit() {
 }
 
 // public kernel fork wrapper
-int fork(void){
+int fork(void)
+{
     return kfork();
 }
 
 // terminate current process
-void exit(int status){
+void exit(int status)
+{
     struct proc *p = get_current_process();
     push_off();
     p->xstate = status;
@@ -340,42 +378,53 @@ void exit(int status){
 }
 
 // wait for a child to exit; simplistic busy loop
-int wait(int *status){
+int wait(int *status)
+{
     printf("wait: pid=%d waiting for child\n", get_current_process()->pid);
     struct proc *p = get_current_process();
 
-    for(;;){
+    for (;;)
+    {
         int have_child = 0;
 
-        for(int i=0;i<NPROC;i++){
+        for (int i = 0; i < NPROC; i++)
+        {
             struct proc *ch = &procs[i];
 
-            if(ch->parent == p){
+            if (ch->parent == p)
+            {
                 have_child = 1;
 
-                if(ch->state == ZOMBIE){
+                if (ch->state == ZOMBIE)
+                {
                     int pid = ch->pid;
-                    if(status) *status = ch->xstate; // user VA ignored simplistically
+                    if (status)
+                        *status = ch->xstate; // user VA ignored simplistically
                     free_process(ch);
                     return pid;
                 }
             }
         }
 
-        if(!have_child) return -1; // no children
+        if (!have_child)
+            return -1; // no children
 
         yield();
     }
 }
 
 // set killed flag of pid
-int kill(int pid){
-    for(int i=0;i<NPROC;i++){
+int kill(int pid)
+{
+    for (int i = 0; i < NPROC; i++)
+    {
         struct proc *p = &procs[i];
-        if(p->pid == pid){
+        if (p->pid == pid)
+        {
             push_off();
             p->killed = 1;
-            if(p->state == SLEEPING) p->state = RUNNABLE;
+            if (p->state == SLEEPING)
+                p->state = RUNNABLE;
             pop_off();
             return 0;
         }
@@ -384,7 +433,8 @@ int kill(int pid){
 }
 
 // return current pid
-int getpid(void){
+int getpid(void)
+{
     struct proc *p = get_current_process();
     return p ? p->pid : -1;
 }

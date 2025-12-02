@@ -13,7 +13,7 @@
 #include "riscv.h"
 #include "memlayout.h"
 
-.section trampsec
+.section .trampsec
 .globl trampoline
 .globl usertrap
 trampoline:
@@ -101,7 +101,7 @@ uservec:
 
 .globl userret
 userret:
-        .word 0x0000000000000000  # padding
+        // .word 0x0000000000000000  # padding
         # usertrap() returns here, with user satp in a0.
         # return from kernel to user.
 
